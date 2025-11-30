@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Construtor de Plantas • LICITAR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header id="topbar">
+  <div class="logo">LICITAR • Planta Builder</div>
+
+  <div class="toolbar">
+    <button onclick="setMode('wall')">Paredes</button>
+    <button onclick="setMode('door')">Portas</button>
+    <button onclick="setMode('window')">Janelas</button>
+    <button onclick="setMode('object')">Móveis</button>
+    <button onclick="setMode('dimension')">Cotas</button>
+    <button onclick="undo()">↶ Undo</button>
+    <button onclick="redo()">↷ Redo</button>
+    <button onclick="saveProject()">Salvar</button>
+    <button onclick="loadProject()">Carregar</button>
+    <button onclick="exportPNG()">PNG</button>
+    <button onclick="exportPDF()">PDF</button>
+  </div>
+</header>
+
+<div id="workspace">
+  <div id="grid"></div>
+  <svg id="canvas" width="5000" height="5000"></svg>
+</div>
+
+<script src="builder.js"></script>
+</body>
+</html>
