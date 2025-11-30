@@ -2,112 +2,40 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Planta Builder Profissional • LICITAR</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planta CAD Profissional • LICITAR</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
 <style>
-/* ================================
-   ESTILO GERAL
-================================ */
+/* =============== ESTILO =============== */
 :root{
-  --azul:#0b1e39;
-  --dourado:#c9a86c;
-  --grid:#e3e6eb;
-  --sel:#ffcc00;
+ --azul:#0b1e39; --dourado:#c9a86c; --grid:#dfe3e8;
+ --sel:#ffcc00;
 }
-
-body{
-  margin:0;
-  overflow:hidden;
-  font-family:Arial, sans-serif;
-}
-
-/* TOPO */
-header{
-  background:var(--azul);
-  color:white;
-  padding:10px;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
+body{margin:0;font-family:Arial;overflow:hidden;}
+header{background:var(--azul);color:#fff;padding:8px;display:flex;gap:6px;align-items:center;}
 header button{
-  background:var(--dourado);
-  border:none;
-  padding:7px 14px;
-  border-radius:6px;
-  cursor:pointer;
-  font-weight:bold;
+ background:var(--dourado);border:none;padding:7px 12px;border-radius:5px;
+ font-weight:bold;cursor:pointer;
 }
-
-/* ÁREA DE TRABALHO */
-#workspace{
-  width:100vw;
-  height:100vh;
-  position:relative;
-  overflow:hidden;
-}
-
+#workspace{position:relative;width:100vw;height:100vh;overflow:hidden;}
 #grid{
-  width:5000px;
-  height:5000px;
-  background-image:
-    linear-gradient(to right, var(--grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
-  background-size:50px 50px;
-  position:absolute;
-  top:0;
-  left:0;
+ width:5000px;height:5000px;position:absolute;
+ background-image:
+  linear-gradient(to right,var(--grid)1px,transparent 1px),
+  linear-gradient(to bottom,var(--grid)1px,transparent 1px);
+ background-size:50px 50px;
 }
-
-svg{
-  position:absolute;
-  top:0; left:0;
-}
-
-/* PAREDES */
-.wall{
-  stroke:var(--azul);
-  stroke-width:6;
-  cursor:pointer;
-}
-
-/* HANDLE (pontos de edição) */
-.handle{
-  fill:white;
-  stroke:var(--sel);
-  stroke-width:3;
-  r:9;
-  cursor:pointer;
-}
-
-/* MEDIDAS */
-.measure{
-  fill:var(--azul);
-  font-size:14px;
-  font-weight:bold;
-  cursor:pointer;
-}
-
-/* MENU FLUTUANTE */
+svg{position:absolute;top:0;left:0;}
+.wall{stroke:var(--azul);stroke-width:6;cursor:pointer;}
+.handle{fill:#fff;stroke:var(--sel);stroke-width:3;cursor:pointer;}
+.measure{fill:var(--azul);font-size:14px;font-weight:bold;cursor:pointer;}
 .menu{
-  position:absolute;
-  background:white;
-  border:2px solid var(--azul);
-  border-radius:6px;
-  padding:6px;
-  display:flex;
-  flex-direction:column;
-  z-index:999;
+ position:absolute;z-index:10;background:#fff;border:2px solid var(--azul);
+ padding:6px;border-radius:6px;display:flex;flex-direction:column;gap:4px;
 }
 .menu button{
-  background:var(--dourado);
-  border:none;
-  padding:6px;
-  margin:3px 0;
-  border-radius:4px;
-  cursor:pointer;
-  font-weight:bold;
+ background:var(--dourado);border:none;padding:5px;border-radius:4px;
+ font-weight:bold;cursor:pointer;
 }
 </style>
 </head>
@@ -115,396 +43,331 @@ svg{
 <body>
 
 <header>
-  <button onclick="mode='wall'">Parede</button>
-  <button onclick="mode='door'">Porta</button>
-  <button onclick="mode='window'">Janela</button>
-  <button onclick="saveProject()">Salvar</button>
-  <button onclick="loadProject()">Carregar</button>
-  <button onclick="exportPNG()">PNG</button>
-  <span style="margin-left:auto;opacity:.8">Zoom = scroll • Mover tela = botão do meio</span>
+ <button onclick="setMode('wall')">Parede</button>
+ <button onclick="setMode('door')">Porta</button>
+ <button onclick="setMode('window')">Janela</button>
+ <button onclick="saveProject()">Salvar</button>
+ <button onclick="loadProject()">Carregar</button>
+ <button onclick="exportPNG()">PNG</button>
+ <span style="margin-left:auto;opacity:.8">Zoom = scroll | mover = botão do meio</span>
 </header>
 
 <div id="workspace">
-  <div id="grid"></div>
-  <svg id="svg" width="5000" height="5000"></svg>
+ <div id="grid"></div>
+ <svg id="svg" width="5000" height="5000"></svg>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <script>
-/* ============================================
-   VARIÁVEIS PRINCIPAIS
-============================================ */
-let svg=document.getElementById("svg");
-let grid=document.getElementById("grid");
+/* ==========================================================
+   SISTEMA PROFISSIONAL DE PLANTA – COMPLETO
+   ========================================================== */
 
-let mode="wall";
-let startX=null,startY=null;
+let svg = document.getElementById("svg");
+let grid = document.getElementById("grid");
+let mode = "wall";
+let zoom = 1, offsetX = 0, offsetY = 0, isPanning = false;
 
-let zoom=1;
-let offsetX=0,offsetY=0;
-let isPanning=false;
+let walls = [];
+let startPoint = null;
+let selected = null;
+let menu = null;
 
-let selected=null;
-let menu=null;
+function setMode(m){mode=m;clearSelection();}
 
-/* SNAPPING */
-function snap(v){ return Math.round(v/10)*10; }
+function snap(v){return Math.round(v/10)*10;}
 
-/* ============================================
-   EVENTO DE CLIQUE PARA DESENHAR
-============================================ */
-svg.addEventListener("click", e=>{
-  if(e.target.classList.contains("handle")) return;
-  if(e.target.classList.contains("wall")) return;
+/* ===================== CLIQUE NO CANVAS ====================== */
+svg.addEventListener("mousedown", e=>{
+ if(e.target.classList.contains("handle")) return;
+ if(e.target.classList.contains("wall")) return;
 
-  const rect=svg.getBoundingClientRect();
-  let x=(e.clientX-rect.left-offsetX)/zoom;
-  let y=(e.clientY-rect.top-offsetY)/zoom;
+ const r = svg.getBoundingClientRect();
+ let x = snap((e.clientX - r.left - offsetX) / zoom);
+ let y = snap((e.clientY - r.top - offsetY) / zoom);
 
-  x=snap(x);
-  y=snap(y);
+ if(startPoint==null){ startPoint={x,y}; return; }
 
-  if(startX===null){
-    startX=x; startY=y;
-    return;
-  }
+ if(mode==="wall") createWall(startPoint.x,startPoint.y,x,y);
+ if(mode==="door") createDoor(x,y);
+ if(mode==="window") createWindow(x,y);
 
-  if(mode==="wall") criarParede(x,y);
-  if(mode==="door") criarPorta(x,y);
-  if(mode==="window") criarJanela(x,y);
-
-  startX=null; startY=null;
+ startPoint = null;
 });
 
-/* ============================================
-   CRIAR PAREDE
-============================================ */
-function criarParede(x,y){
-  let dx=x-startX;
-  let dy=y-startY;
-  let dist=Math.sqrt(dx*dx+dy*dy);
+/* ======================= CRIA PAREDE ========================= */
+function createWall(x1,y1,x2,y2){
+ let dx=x2-x1, dy=y2-y1;
+ let dist=Math.sqrt(dx*dx+dy*dy)/50;
+ let real=prompt("Comprimento (m):", dist.toFixed(2));
+ if(!real) return;
 
-  let medida=(dist/50).toFixed(2);
-  let real=prompt("Medida da parede (m):", medida);
-  if(!real) return;
+ let px=real*50;
+ let ang=Math.atan2(dy,dx);
+ let x2r=x1+Math.cos(ang)*px;
+ let y2r=y1+Math.sin(ang)*px;
 
-  let px=real*50;
-  let ang=Math.atan2(dy,dx);
+ let group = document.createElementNS("http://www.w3.org/2000/svg","g");
+ svg.appendChild(group);
 
-  let x2=startX+Math.cos(ang)*px;
-  let y2=startY+Math.sin(ang)*px;
+ let line=document.createElementNS("http://www.w3.org/2000/svg","line");
+ line.classList.add("wall");
+ line.setAttribute("x1",x1); line.setAttribute("y1",y1);
+ line.setAttribute("x2",x2r); line.setAttribute("y2",y2r);
+ line.addEventListener("mousedown",()=>selectWall(wall));
+ group.appendChild(line);
 
-  let l=document.createElementNS("http://www.w3.org/2000/svg","line");
-  l.classList.add("wall");
-  l.setAttribute("x1",startX);
-  l.setAttribute("y1",startY);
-  l.setAttribute("x2",x2);
-  l.setAttribute("y2",y2);
-  l.addEventListener("mousedown",()=>selecionarParede(l));
-  svg.appendChild(l);
+ let midx=(x1+x2r)/2, midy=(y1+y2r)/2;
 
-  criarCota(l);
+ let label=document.createElementNS("http://www.w3.org/2000/svg","text");
+ label.classList.add("measure");
+ label.setAttribute("x",midx);
+ label.setAttribute("y",midy-10);
+ label.textContent=real+" m";
+ label.addEventListener("click",()=>editMeasure(wall));
+ group.appendChild(label);
+
+ let h1=createHandle(x1,y1,wall=""); 
+ let h2=createHandle(x2r,y2r,wall=""); 
+ group.appendChild(h1);
+ group.appendChild(h2);
+
+ let wall = {id:Date.now(), x1,y1,x2:x2r,y2:y2r, line,label,h1,h2,group};
+ h1.wall=wall; h2.wall=wall;
+
+ group.wall=wall;
+ walls.push(wall);
+
 }
 
-/* ============================================
-   CRIAR PORTA
-============================================ */
-function criarPorta(x,y){
-  let w=0.8*50;
-  let d=document.createElementNS("http://www.w3.org/2000/svg","line");
-  d.classList.add("wall");
-  d.setAttribute("x1",x);
-  d.setAttribute("y1",y);
-  d.setAttribute("x2",x+w);
-  d.setAttribute("y2",y);
-  svg.appendChild(d);
+/* ======================= CRIA HANDLE ========================= */
+function createHandle(x,y,wall){
+ let h=document.createElementNS("http://www.w3.org/2000/svg","circle");
+ h.classList.add("handle");
+ h.setAttribute("cx",x); h.setAttribute("cy",y);
+ h.setAttribute("r",8);
+ h.addEventListener("mousedown",(e)=>startHandleDrag(e,h));
+ return h;
 }
 
-/* ============================================
-   CRIAR JANELA
-============================================ */
-function criarJanela(x,y){
-  let w=1.2*50;
-  let j=document.createElementNS("http://www.w3.org/2000/svg","rect");
-  j.classList.add("wall");
-  j.setAttribute("x",x);
-  j.setAttribute("y",y-4);
-  j.setAttribute("width",w);
-  j.setAttribute("height",8);
-  svg.appendChild(j);
+function startHandleDrag(e,h){
+ e.stopPropagation();
+ let wall=h.wall;
+ function move(ev){
+   const r=svg.getBoundingClientRect();
+   let x=snap((ev.clientX-r.left-offsetX)/zoom);
+   let y=snap((ev.clientY-r.top-offsetY)/zoom);
+   h.setAttribute("cx",x); h.setAttribute("cy",y);
+
+   if(h==wall.h1){wall.x1=x;wall.y1=y;}
+   else{wall.x2=x;wall.y2=y;}
+
+   updateWallGeometry(wall);
+ }
+ function up(){
+   document.removeEventListener("mousemove",move);
+   document.removeEventListener("mouseup",up);
+ }
+ document.addEventListener("mousemove",move);
+ document.addEventListener("mouseup",up);
 }
 
-/* ============================================
-   CRIAR COTA
-============================================ */
-function criarCota(l){
-  let x1=parseFloat(l.getAttribute("x1"));
-  let y1=parseFloat(l.getAttribute("y1"));
-  let x2=parseFloat(l.getAttribute("x2"));
-  let y2=parseFloat(l.getAttribute("y2"));
-  let dist=Math.sqrt((x2-x1)**2+(y2-y1)**2)/50;
+/* ======================= ATUALIZA PAREDE ===================== */
+function updateWallGeometry(w){
+ w.line.setAttribute("x1",w.x1);
+ w.line.setAttribute("y1",w.y1);
+ w.line.setAttribute("x2",w.x2);
+ w.line.setAttribute("y2",w.y2);
+ w.h1.setAttribute("cx",w.x1); w.h1.setAttribute("cy",w.y1);
+ w.h2.setAttribute("cx",w.x2); w.h2.setAttribute("cy",w.y2);
 
-  let mx=(x1+x2)/2;
-  let my=(y1+y2)/2;
+ let dx=w.x2-w.x1, dy=w.y2-w.y1;
+ let dist=Math.sqrt(dx*dx+dy*dy)/50;
+ w.label.textContent = dist.toFixed(2)+" m";
 
-  let t=document.createElementNS("http://www.w3.org/2000/svg","text");
-  t.classList.add("measure");
-  t.setAttribute("x",mx);
-  t.setAttribute("y",my-10);
-  t.textContent=dist.toFixed(2)+" m";
-  t.addEventListener("click",()=>editarCota(t,l));
-  svg.appendChild(t);
+ w.label.setAttribute("x",(w.x1+w.x2)/2);
+ w.label.setAttribute("y",(w.y1+w.y2)/2 - 10);
 }
 
-/* EDITAR COTA */
-function editarCota(t,l){
-  let nova=prompt("Nova medida:", t.textContent.replace(" m",""));
-  if(nova){
-    t.textContent=nova+" m";
-    // ajusta parede
-    let x1=parseFloat(l.getAttribute("x1"));
-    let y1=parseFloat(l.getAttribute("y1"));
-    let x2=parseFloat(l.getAttribute("x2"));
-    let y2=parseFloat(l.getAttribute("y2"));
-    let ang=Math.atan2(y2-y1,x2-x1);
-    let px=nova*50;
-    l.setAttribute("x2",x1+Math.cos(ang)*px);
-    l.setAttribute("y2",y1+Math.sin(ang)*px);
-  }
+/* ======================= EDITA MEDIDA ======================== */
+function editMeasure(w){
+ let m=prompt("Nova medida (m):", w.label.textContent.replace(" m",""));
+ if(!m) return;
+ let ang=Math.atan2(w.y2-w.y1,w.x2-w.x1);
+ let px=m*50;
+ w.x2=w.x1+Math.cos(ang)*px;
+ w.y2=w.y1+Math.sin(ang)*px;
+ updateWallGeometry(w);
 }
 
-/* ============================================
-   SELEÇÃO
-============================================ */
-function selecionarParede(l){
-  limparSelecao();
-  selected=l;
-  criarHandles(l);
-  criarMenu(l);
+/* ======================= SELEÇÃO ============================ */
+function selectWall(wall){
+ clearSelection();
+ selected=wall;
+ wall.line.style.stroke="var(--sel)";
+ showMenu(wall);
 }
 
-/* ============================================
-   HANDLES
-============================================ */
-function criarHandles(l){
-  let x1=parseFloat(l.getAttribute("x1"));
-  let y1=parseFloat(l.getAttribute("y1"));
-  let x2=parseFloat(l.getAttribute("x2"));
-  let y2=parseFloat(l.getAttribute("y2"));
-
-  criarHandle(x1,y1,"h1",l);
-  criarHandle(x2,y2,"h2",l);
+function clearSelection(){
+ walls.forEach(w=>w.line.style.stroke="var(--azul)");
+ document.querySelectorAll(".menu").forEach(m=>m.remove());
+ selected=null;
 }
 
-function criarHandle(x,y,nome,l){
-  let h=document.createElementNS("http://www.w3.org/2000/svg","circle");
-  h.classList.add("handle");
-  h.setAttribute("cx",x);
-  h.setAttribute("cy",y);
-  h.dataset.parent=l;
-  h.dataset.type=nome;
-  svg.appendChild(h);
+/* ======================= MENU FLUTUANTE ===================== */
+function showMenu(w){
+ menu=document.createElement("div");
+ menu.classList.add("menu");
+ document.body.appendChild(menu);
 
-  h.addEventListener("mousedown",e=>{
-    e.stopPropagation();
-    moverHandle(e,h,l);
-  });
+ let b1=createMenuBtn("Mover",()=>moveWall(w));
+ let b2=createMenuBtn("Girar",()=>rotateWall(w));
+ let b3=createMenuBtn("Editar Medida",()=>editMeasure(w));
+ let b4=createMenuBtn("Excluir",()=>deleteWall(w));
+
+ menu.appendChild(b1); menu.appendChild(b2);
+ menu.appendChild(b3); menu.appendChild(b4);
+
+ let x=w.x2*zoom+offsetX;
+ let y=w.y2*zoom+offsetY;
+ menu.style.left=x+"px";
+ menu.style.top=y+"px";
 }
 
-function moverHandle(e,h,l){
-  function move(ev){
-    const rect=svg.getBoundingClientRect();
-    let x=(ev.clientX-rect.left-offsetX)/zoom;
-    let y=(ev.clientY-rect.top-offsetY)/zoom;
-    x=snap(x); y=snap(y);
-    h.setAttribute("cx",x);
-    h.setAttribute("cy",y);
-
-    if(h.dataset.type==="h1"){
-      l.setAttribute("x1",x);
-      l.setAttribute("y1",y);
-    } else {
-      l.setAttribute("x2",x);
-      l.setAttribute("y2",y);
-    }
-  }
-  function up(){
-    document.removeEventListener("mousemove",move);
-    document.removeEventListener("mouseup",up);
-  }
-  document.addEventListener("mousemove",move);
-  document.addEventListener("mouseup",up);
+function createMenuBtn(txt,fn){
+ let b=document.createElement("button");
+ b.textContent=txt;
+ b.onclick=fn;
+ return b;
 }
 
-/* ============================================
-   MENU FLUTUANTE
-============================================ */
-function criarMenu(l){
-  menu=document.createElement("div");
-  menu.classList.add("menu");
-  document.body.appendChild(menu);
-
-  let b1=document.createElement("button");
-  b1.textContent="Mover";
-  b1.onclick=()=>moverParede(l);
-
-  let b2=document.createElement("button");
-  b2.textContent="Girar";
-  b2.onclick=()=>girarParede(l);
-
-  let b3=document.createElement("button");
-  b3.textContent="Editar medida";
-  b3.onclick=()=>editarCota(document.querySelector(".measure"),l);
-
-  let b4=document.createElement("button");
-  b4.textContent="Excluir";
-  b4.onclick=()=>{ l.remove(); limparSelecao(); };
-
-  menu.appendChild(b1);
-  menu.appendChild(b2);
-  menu.appendChild(b3);
-  menu.appendChild(b4);
-
-  const x=parseFloat(l.getAttribute("x2"));
-  const y=parseFloat(l.getAttribute("y2"));
-
-  menu.style.left=(x*zoom+offsetX)+"px";
-  menu.style.top=(y*zoom+offsetY)+"px";
+/* ======================= MOVER =============================== */
+function moveWall(w){
+ function move(e){
+   let dx=e.movementX/zoom;
+   let dy=e.movementY/zoom;
+   w.x1+=dx; w.y1+=dy;
+   w.x2+=dx; w.y2+=dy;
+   updateWallGeometry(w);
+ }
+ function up(){
+   document.removeEventListener("mousemove",move);
+   document.removeEventListener("mouseup",up);
+ }
+ document.addEventListener("mousemove",move);
+ document.addEventListener("mouseup",up);
 }
 
-function limparSelecao(){
-  selected=null;
-  document.querySelectorAll(".handle").forEach(h=>h.remove());
-  if(menu) menu.remove();
+/* ======================= GIRAR =============================== */
+function rotateWall(w){
+ const cx=w.x1, cy=w.y1;
+ function move(e){
+   const r=svg.getBoundingClientRect();
+   let mx=(e.clientX-r.left-offsetX)/zoom;
+   let my=(e.clientY-r.top-offsetY)/zoom;
+   let ang=Math.atan2(my-cy,mx-cx);
+   let dist=Math.sqrt((w.x2-cx)**2+(w.y2-cy)**2);
+   w.x2=cx+Math.cos(ang)*dist;
+   w.y2=cy+Math.sin(ang)*dist;
+   updateWallGeometry(w);
+ }
+ function up(){
+   document.removeEventListener("mousemove",move);
+   document.removeEventListener("mouseup",up);
+ }
+ document.addEventListener("mousemove",move);
+ document.addEventListener("mouseup",up);
 }
 
-/* ============================================
-   MOVER PAREDE
-============================================ */
-function moverParede(l){
-  function move(e){
-    const rect=svg.getBoundingClientRect();
-    let dx=e.movementX/zoom;
-    let dy=e.movementY/zoom;
-
-    let x1=parseFloat(l.getAttribute("x1"))+dx;
-    let y1=parseFloat(l.getAttribute("y1"))+dy;
-    let x2=parseFloat(l.getAttribute("x2"))+dx;
-    let y2=parseFloat(l.getAttribute("y2"))+dy;
-
-    l.setAttribute("x1",x1);
-    l.setAttribute("y1",y1);
-    l.setAttribute("x2",x2);
-    l.setAttribute("y2",y2);
-
-    limparSelecao();
-    selecionarParede(l);
-  }
-  function up(){
-    document.removeEventListener("mousemove",move);
-    document.removeEventListener("mouseup",up);
-  }
-  document.addEventListener("mousemove",move);
-  document.addEventListener("mouseup",up);
+/* ======================= EXCLUIR ============================= */
+function deleteWall(w){
+ w.group.remove();
+ walls = walls.filter(a=>a!==w);
+ clearSelection();
 }
 
-/* ============================================
-   GIRAR PAREDE
-============================================ */
-function girarParede(l){
-  const x1=parseFloat(l.getAttribute("x1"));
-  const y1=parseFloat(l.getAttribute("y1"));
-
-  function move(ev){
-    const rect=svg.getBoundingClientRect();
-    let x=(ev.clientX-rect.left-offsetX)/zoom;
-    let y=(ev.clientY-rect.top-offsetY)/zoom;
-
-    let ang=Math.atan2(y-y1,x-x1);
-    let dist=Math.sqrt((parseFloat(l.getAttribute("x2"))-x1)**2 +
-                       (parseFloat(l.getAttribute("y2"))-y1)**2);
-
-    let x2=x1+Math.cos(ang)*dist;
-    let y2=y1+Math.sin(ang)*dist;
-
-    l.setAttribute("x2",x2);
-    l.setAttribute("y2",y2);
-
-    limparSelecao();
-    selecionarParede(l);
-  }
-
-  function up(){
-    document.removeEventListener("mousemove",move);
-    document.removeEventListener("mouseup",up);
-  }
-
-  document.addEventListener("mousemove",move);
-  document.addEventListener("mouseup",up);
+/* ======================= PORTA =============================== */
+function createDoor(x,y){
+ let w=0.8*50;
+ let d=document.createElementNS("http://www.w3.org/2000/svg","line");
+ d.classList.add("wall");
+ d.setAttribute("x1",x); d.setAttribute("y1",y);
+ d.setAttribute("x2",x+w); d.setAttribute("y2",y);
+ svg.appendChild(d);
 }
 
-/* ============================================
-   PAN / ZOOM
-============================================ */
-document.addEventListener("wheel", e=>{
-  e.preventDefault();
-  zoom+=e.deltaY>0?-0.1:0.1;
-  zoom=Math.max(.3,Math.min(4,zoom));
-  aplicarTransform();
+/* ======================= JANELA ============================== */
+function createWindow(x,y){
+ let w=1.2*50;
+ let j=document.createElementNS("http://www.w3.org/2000/svg","rect");
+ j.setAttribute("x",x); j.setAttribute("y",y-4);
+ j.setAttribute("width",w); j.setAttribute("height",8);
+ j.style.fill="#00aaff";
+ svg.appendChild(j);
+}
+
+/* ======================= ZOOM E PAN ========================== */
+document.addEventListener("wheel",e=>{
+ e.preventDefault();
+ zoom+=e.deltaY>0?-0.1:0.1;
+ zoom=Math.max(.3,Math.min(4,zoom));
+ applyTransform();
 },{passive:false});
 
-document.addEventListener("mousedown", e=>{
-  if(e.button===1){
-    isPanning=true;
-    panSX=e.clientX-offsetX;
-    panSY=e.clientY-offsetY;
-  }
+document.addEventListener("mousedown",e=>{
+ if(e.button===1){
+   isPanning=true;
+   panSX=e.clientX-offsetX;
+   panSY=e.clientY-offsetY;
+ }
 });
 document.addEventListener("mouseup",()=>isPanning=false);
 document.addEventListener("mousemove",e=>{
-  if(isPanning){
-    offsetX=e.clientX-panSX;
-    offsetY=e.clientY-panSY;
-    aplicarTransform();
-  }
+ if(isPanning){
+   offsetX=e.clientX-panSX;
+   offsetY=e.clientY-panSY;
+   applyTransform();
+ }
 });
-function aplicarTransform(){
-  svg.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
-  grid.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
+function applyTransform(){
+ svg.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
+ grid.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
 }
 
-/* ============================================
-   SALVAR / CARREGAR
-============================================ */
+/* ======================= SALVAR / CARREGAR =================== */
 function saveProject(){
-  let blob=new Blob([svg.innerHTML],{type:"text/plain"});
-  let a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="planta.json";
-  a.click();
+ let json=JSON.stringify(walls.map(w=>({
+   x1:w.x1,y1:w.y1,x2:w.x2,y2:w.y2
+ })));
+ let a=document.createElement("a");
+ a.href=URL.createObjectURL(new Blob([json]));
+ a.download="planta.json";
+ a.click();
 }
 
 function loadProject(){
-  let input=document.createElement("input");
-  input.type="file";
-  input.onchange=e=>{
-    let r=new FileReader();
-    r.onload=ev=>svg.innerHTML=ev.target.result;
-    r.readAsText(e.target.files[0]);
-  };
-  input.click();
+ let i=document.createElement("input");
+ i.type="file";
+ i.onchange=e=>{
+   let r=new FileReader();
+   r.onload=ev=>{
+     walls=[];
+     svg.innerHTML="";
+     let arr=JSON.parse(ev.target.result);
+     arr.forEach(w=>{startPoint={x:w.x1,y:w.y1};createWall(w.x1,w.y1,w.x2,w.y2)});
+   };
+   r.readAsText(e.target.files[0]);
+ };
+ i.click();
 }
 
-/* ============================================
-   EXPORTAR PNG
-============================================ */
+/* ======================= EXPORTAR PNG ======================== */
 function exportPNG(){
-  html2canvas(document.getElementById("workspace")).then(c=>{
-    let a=document.createElement("a");
-    a.href=c.toDataURL("image/png");
-    a.download="planta.png";
-    a.click();
-  });
+ html2canvas(document.getElementById("workspace")).then(c=>{
+   let a=document.createElement("a");
+   a.href=c.toDataURL(); a.download="planta.png"; a.click();
+ });
 }
 </script>
 
