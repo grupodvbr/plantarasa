@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<title>Planta Builder • LICITAR</title>
+<meta charset="UTF-8">
+<title>Planta Rasa • LICITAR</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-/* ================================
-   ESTILO GERAL
-================================ */
+/* =======================
+   ESTILO
+======================= */
 :root{
   --azul:#0b1e39;
   --dourado:#c9a86c;
@@ -17,24 +17,17 @@
 
 body{
   margin:0;
-  font-family:Arial, sans-serif;
   overflow:hidden;
-  background:#fff;
+  font-family:Arial, sans-serif;
 }
 
-/* TOPO */
 header{
   background:var(--azul);
   color:white;
-  padding:12px;
+  padding:10px;
   display:flex;
-  justify-content:space-between;
   align-items:center;
-}
-
-header .title{
-  font-size:20px;
-  font-weight:bold;
+  gap:10px;
 }
 
 header button{
@@ -42,23 +35,20 @@ header button{
   border:none;
   padding:7px 14px;
   border-radius:6px;
-  margin-left:5px;
   cursor:pointer;
   font-weight:bold;
-  color:#111;
 }
 
-/* ÁREA DE TRABALHO */
 #workspace{
   width:100vw;
   height:100vh;
-  overflow:hidden;
   position:relative;
+  overflow:hidden;
 }
 
 #grid{
-  width:4000px;
-  height:4000px;
+  width:5000px;
+  height:5000px;
   background-image:
     linear-gradient(to right, var(--grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
@@ -68,10 +58,9 @@ header button{
   left:0;
 }
 
-#canvas{
+svg{
   position:absolute;
-  top:0;
-  left:0;
+  top:0; left:0;
 }
 
 .wall{
@@ -82,19 +71,8 @@ header button{
 
 .measure{
   fill:var(--azul);
-  font-size:14px;
   font-weight:bold;
-}
-
-.door, .window{
-  stroke:#d46800;
-  stroke-width:4;
-}
-
-.object{
-  fill:rgba(0,0,0,0.05);
-  stroke:#333;
-  stroke-width:2;
+  font-size:14px;
 }
 </style>
 </head>
@@ -102,133 +80,66 @@ header button{
 <body>
 
 <header>
-  <div class="title">LICITAR • Planta Builder</div>
-
-  <div>
-    <button onclick="setMode('wall')">Parede</button>
-    <button onclick="setMode('door')">Porta</button>
-    <button onclick="setMode('window')">Janela</button>
-    <button onclick="setMode('object')">Móvel</button>
-    <button onclick="setMode('dimension')">Cota</button>
-    <button onclick="undo()">↶</button>
-    <button onclick="redo()">↷</button>
-    <button onclick="saveProject()">Salvar</button>
-    <button onclick="loadProject()">Carregar</button>
-    <button onclick="exportPNG()">PNG</button>
-  </div>
+  <button onclick="startWall()">Adicionar Parede</button>
+  <button onclick="saveProject()">Salvar</button>
+  <button onclick="loadProject()">Carregar</button>
+  <button onclick="exportPNG()">PNG</button>
+  <span style="margin-left:auto; color:#fff; opacity:.8">
+    Arraste com o botão do meio • Zoom com scroll
+  </span>
 </header>
 
 <div id="workspace">
   <div id="grid"></div>
-  <svg id="canvas" width="4000" height="4000"></svg>
+  <svg id="svg" width="5000" height="5000"></svg>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-/* ============================================
+/* =======================
    VARIÁVEIS PRINCIPAIS
-============================================ */
-let canvas = document.getElementById("canvas");
+======================= */
+let svg = document.getElementById("svg");
 let grid = document.getElementById("grid");
 
-let mode = null;
+let startX = null, startY = null;
+let addingWall = false;
+let scale = 50; // 1m = 50px
 let zoom = 1;
 let offsetX = 0, offsetY = 0;
-
-let startX = null;
-let startY = null;
-
-let scale = 50; // 1m = 50px
 let isPanning = false;
 
-let undoStack = [];
-let redoStack = [];
+let undoStack = [], redoStack = [];
 
-/* ============================================
-   CONTROLES DE MODO
-============================================ */
-function setMode(m){
-  mode = m;
-  alert("Modo: " + m);
+/* =======================
+   INICIAR PAREDE
+======================= */
+function startWall(){
+  addingWall = true;
+  alert("Clique para iniciar a parede.");
 }
 
-/* ============================================
-   ZOOM
-============================================ */
-document.addEventListener("wheel", e=>{
-  e.preventDefault();
-  zoom += (e.deltaY > 0 ? -0.1 : 0.1);
-  zoom = Math.min(Math.max(zoom, 0.3), 4);
-  applyTransform();
-},{passive:false});
+/* =======================
+   CLIQUES PARA PAREDES
+======================= */
+svg.addEventListener("click", e=>{
+  if(!addingWall) return;
 
-/* PAN */
-document.addEventListener("mousedown", e=>{
-  if(e.button === 1 || e.code === "Space"){
-    isPanning = true;
-    panStartX = e.clientX - offsetX;
-    panStartY = e.clientY - offsetY;
-  }
-});
-
-document.addEventListener("mouseup", ()=> isPanning=false);
-
-document.addEventListener("mousemove", e=>{
-  if(isPanning){
-    offsetX = e.clientX - panStartX;
-    offsetY = e.clientY - panStartY;
-    applyTransform();
-  }
-});
-
-function applyTransform(){
-  canvas.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
-  grid.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
-}
-
-/* ============================================
-   CLIQUE PARA DESENHAR
-============================================ */
-canvas.addEventListener("click", e=>{
-  const rect = canvas.getBoundingClientRect();
+  const rect = svg.getBoundingClientRect();
   let x = (e.clientX - rect.left - offsetX)/zoom;
   let y = (e.clientY - rect.top - offsetY)/zoom;
 
   if(startX === null){
-    startX = x;
-    startY = y;
+    startX = x; startY = y;
     return;
   }
 
-  if(mode === "wall"){
-    criarParede(x,y);
-  }
-  if(mode === "door"){
-    criarPorta(x,y);
-  }
-  if(mode === "window"){
-    criarJanela(x,y);
-  }
-  if(mode === "object"){
-    criarObjeto(x,y);
-  }
-  if(mode === "dimension"){
-    criarCota(x,y);
-  }
-
-  startX = null;
-  startY = null;
-});
-
-/* ============================================
-   PAREDES
-============================================ */
-function criarParede(x,y){
   let dx = x - startX;
   let dy = y - startY;
   let distReal = Math.sqrt(dx*dx + dy*dy) / scale;
 
-  let medida = prompt("Comprimento da parede (m):", distReal.toFixed(2));
-  if(!medida) return;
+  let medida = prompt("Comprimento da parede (metros):", distReal.toFixed(2));
+  if(!medida){ resetWall(); return; }
 
   let px = medida * scale;
   let ang = Math.atan2(dy, dx);
@@ -236,121 +147,104 @@ function criarParede(x,y){
   let x2 = startX + Math.cos(ang)*px;
   let y2 = startY + Math.sin(ang)*px;
 
+  desenharParede(startX, startY, x2, y2, medida);
+
+  saveState();
+  resetWall();
+});
+
+function resetWall(){
+  startX = null;
+  startY = null;
+  addingWall = false;
+}
+
+/* =======================
+   DESENHAR PAREDE
+======================= */
+function desenharParede(x1,y1,x2,y2,medida){
   let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-  line.setAttribute("x1", startX);
-  line.setAttribute("y1", startY);
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
   line.setAttribute("x2", x2);
   line.setAttribute("y2", y2);
-  line.setAttribute("class","wall");
-  canvas.appendChild(line);
+  line.setAttribute("class", "wall");
+  line.addEventListener("click", ()=> deletarElemento(line));
+  svg.appendChild(line);
 
-  addMeasure(startX,startY,x2,y2,medida);
-
-  saveState();
-}
-
-/* ============================================
-   PORTAS
-============================================ */
-function criarPorta(x,y){
-  let w = 0.80 * scale;
-  let line = document.createElementNS("http://www.w3.org/2000/svg","line");
-  line.setAttribute("x1", x);
-  line.setAttribute("y1", y);
-  line.setAttribute("x2", x+w);
-  line.setAttribute("y2", y);
-  line.setAttribute("class","door");
-  canvas.appendChild(line);
-  saveState();
-}
-
-/* ============================================
-   JANELAS
-============================================ */
-function criarJanela(x,y){
-  let w = 1.20 * scale;
-  let line = document.createElementNS("http://www.w3.org/2000/svg","rect");
-  line.setAttribute("x", x);
-  line.setAttribute("y", y);
-  line.setAttribute("width", w);
-  line.setAttribute("height", 10);
-  line.setAttribute("class","window");
-  canvas.appendChild(line);
-  saveState();
-}
-
-/* ============================================
-   MÓVEIS
-============================================ */
-function criarObjeto(x,y){
-  let rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
-  rect.setAttribute("x", x-25);
-  rect.setAttribute("y", y-25);
-  rect.setAttribute("width", 80);
-  rect.setAttribute("height", 50);
-  rect.setAttribute("class","object");
-  canvas.appendChild(rect);
-  saveState();
-}
-
-/* ============================================
-   COTAS
-============================================ */
-function addMeasure(x1,y1,x2,y2,medida){
-  let mx = (x1+x2)/2;
-  let my = (y1+y2)/2;
+  let mx = (x1 + x2)/2;
+  let my = (y1 + y2)/2 - 10;
 
   let txt = document.createElementNS("http://www.w3.org/2000/svg","text");
   txt.setAttribute("x", mx);
-  txt.setAttribute("y", my - 10);
+  txt.setAttribute("y", my);
   txt.setAttribute("class","measure");
   txt.textContent = medida + " m";
-  canvas.appendChild(txt);
-  return txt;
+  txt.addEventListener("click", ()=> deletarElemento(line, txt));
+  svg.appendChild(txt);
 }
 
-function criarCota(x,y){
-  let dx = x - startX;
-  let dy = y - startY;
-  let dist = Math.sqrt(dx*dx + dy*dy) / scale;
-
-  addMeasure(startX,startY,x,y,dist.toFixed(2));
-  saveState();
+/* =======================
+   DELETAR ELEMENTO
+======================= */
+function deletarElemento(line, txt=null){
+  if(confirm("Excluir esta parede?")){
+    line.remove();
+    if(txt) txt.remove();
+    saveState();
+  }
 }
 
-/* ============================================
-   UNDO / REDO
-============================================ */
-function saveState(){
-  undoStack.push(canvas.innerHTML);
-  redoStack = [];
+/* =======================
+   ZOOM
+======================= */
+document.addEventListener("wheel", e=>{
+  e.preventDefault();
+  zoom += (e.deltaY > 0 ? -0.1 : 0.1);
+  zoom = Math.max(0.3, Math.min(zoom, 4));
+  aplicarTransform();
+},{passive:false});
+
+/* =======================
+   PAN
+======================= */
+document.addEventListener("mousedown", e=>{
+  if(e.button === 1){
+    isPanning = true;
+    panStartX = e.clientX - offsetX;
+    panStartY = e.clientY - offsetY;
+  }
+});
+document.addEventListener("mouseup", ()=> isPanning=false);
+document.addEventListener("mousemove", e=>{
+  if(isPanning){
+    offsetX = e.clientX - panStartX;
+    offsetY = e.clientY - panStartY;
+    aplicarTransform();
+  }
+});
+
+function aplicarTransform(){
+  svg.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
+  grid.style.transform = `translate(${offsetX}px,${offsetY}px) scale(${zoom})`;
 }
 
-function undo(){
-  if(undoStack.length === 0) return;
-  redoStack.push(canvas.innerHTML);
-  canvas.innerHTML = undoStack.pop();
-}
-
-function redo(){
-  if(redoStack.length === 0) return;
-  undoStack.push(canvas.innerHTML);
-  canvas.innerHTML = redoStack.pop();
-}
-
-/* ============================================
-   SALVAR / CARREGAR
-============================================ */
+/* =======================
+   SALVAR
+======================= */
 function saveProject(){
-  let data = canvas.innerHTML;
-  let blob = new Blob([data], {type:'text/plain'});
+  saveState();
+  let blob = new Blob([svg.innerHTML], {type:"text/plain"});
   let url = URL.createObjectURL(blob);
   let a = document.createElement("a");
   a.href = url;
-  a.download = "planta_licitar.json";
+  a.download = "planta.json";
   a.click();
 }
 
+/* =======================
+   CARREGAR
+======================= */
 function loadProject(){
   let input = document.createElement("input");
   input.type = "file";
@@ -358,27 +252,45 @@ function loadProject(){
     let file = e.target.files[0];
     let reader = new FileReader();
     reader.onload = evt=>{
-      canvas.innerHTML = evt.target.result;
+      svg.innerHTML = evt.target.result;
     };
     reader.readAsText(file);
   };
   input.click();
 }
 
-/* ============================================
+/* =======================
    EXPORTAR PNG
-============================================ */
+======================= */
 function exportPNG(){
-  html2canvas(document.body).then(c=>{
+  html2canvas(document.getElementById("workspace")).then(canvas=>{
     let a = document.createElement("a");
-    a.href = c.toDataURL("image/png");
+    a.href = canvas.toDataURL("image/png");
     a.download = "planta.png";
     a.click();
   });
 }
-</script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+/* =======================
+   UNDO/REDO
+======================= */
+function saveState(){
+  undoStack.push(svg.innerHTML);
+  redoStack = [];
+}
+
+function undo(){
+  if(undoStack.length === 0) return;
+  redoStack.push(svg.innerHTML);
+  svg.innerHTML = undoStack.pop();
+}
+
+function redo(){
+  if(redoStack.length === 0) return;
+  undoStack.push(svg.innerHTML);
+  svg.innerHTML = redoStack.pop();
+}
+</script>
 
 </body>
 </html>
